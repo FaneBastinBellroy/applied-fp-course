@@ -50,10 +50,17 @@ main :: IO ()
 main = defaultMain $ testGroup "Applied FP Course - Tests"
 
   [ testWai Core.app "List Topics" $
+      get "list" >>= assertStatus' HTTP.status200
+
+  , testWai Core.app "View a Topic" $
       get "fudge/view" >>= assertStatus' HTTP.status200
 
-  , testWai Core.app "Empty Input" $ do
+  , testWai Core.app "Add to a Topic" $ do
+      resp <- post "fudge/add" "body text"
+      assertStatus' HTTP.status200 resp
+
+  , testWai Core.app "Empty Comment" $ do
       resp <- post "fudge/add" ""
       assertStatus' HTTP.status400 resp
-      assertBody "Empty Comment Text" resp
+      assertBody "ERROR: The comment text provided was empty." resp
   ]
