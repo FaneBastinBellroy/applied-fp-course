@@ -12,10 +12,12 @@ module Level02.Types
     mkCommentText,
     getCommentText,
     renderContentType,
+    errorLBS,
   )
 where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as LBS
 import Data.Text (Text)
 
 -- Working through the specification for our application, what are the
@@ -71,6 +73,15 @@ data RqType
 data Error
   = EmptyTopicError
   | EmptyCommentTextError
+  | PathError
+  | MethodError
+  deriving (Show)
+
+errorLBS :: Error -> LBS.ByteString
+errorLBS EmptyTopicError = "ERROR: The topic provided was empty."
+errorLBS EmptyCommentTextError = "ERROR: The comment text provided was empty."
+errorLBS PathError = "ERROR: Unknown path."
+errorLBS MethodError = "ERROR: Unknown method."
 
 -- Provide the constructors for a sum type to specify the `ContentType` Header,
 -- to be used when we build our Response type. Our application will be simple,
