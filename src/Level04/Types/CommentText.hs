@@ -1,30 +1,32 @@
 module Level04.Types.CommentText
-  ( CommentText
-  , mkCommentText
-  , getCommentText
-  ) where
+  ( CommentText (..),
+    mkCommentText,
+    getCommentText,
+    commentToText,
+  )
+where
 
-import           Waargonaut.Encode          (Encoder)
-import qualified Waargonaut.Encode          as E
-
-import           Level04.Types.Error        (Error (EmptyCommentText),
-                                             nonEmptyText)
-
-import           Data.Functor.Contravariant (contramap)
-import           Data.Text                  (Text)
+import Data.Functor.Contravariant (contramap)
+import Data.Text (Text)
+import Level04.Types.Error
+  ( Error (EmptyCommentText),
+    nonEmptyText,
+  )
+import Waargonaut.Encode (Encoder)
+import qualified Waargonaut.Encode as E
 
 newtype CommentText = CommentText Text
-  deriving Show
+  deriving (Show)
 
-mkCommentText
-  :: Text
-  -> Either Error CommentText
+mkCommentText ::
+  Text ->
+  Either Error CommentText
 mkCommentText =
   nonEmptyText CommentText EmptyCommentText
 
-getCommentText
-  :: CommentText
-  -> Text
+getCommentText ::
+  CommentText ->
+  Text
 getCommentText (CommentText t) =
   t
 
@@ -51,7 +53,10 @@ getCommentText (CommentText t) =
 -- typeclass has a function that comes in very handy when writing these
 -- functions. There is a quick introduction to `Contravariant` in the `README`
 -- for this level.
---
+commentToText :: CommentText -> Text
+commentToText (CommentText ct) = ct
+
 encodeCommentText :: Applicative f => Encoder f CommentText
-encodeCommentText = -- Try using 'contramap' and 'E.text'.
-  error "CommentText JSON encoder not implemented"
+encodeCommentText =
+  -- Try using 'contramap' and 'E.text'.
+  contramap commentToText E.text

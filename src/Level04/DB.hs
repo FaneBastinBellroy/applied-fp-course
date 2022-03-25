@@ -1,28 +1,41 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
+
 module Level04.DB
-  ( FirstAppDB (FirstAppDB)
-  , initDB
-  , closeDB
-  , addCommentToTopic
-  , getComments
-  , getTopics
-  , deleteTopic
-  ) where
+  ( FirstAppDB (FirstAppDB),
+    initDB,
+    closeDB,
+    addCommentToTopic,
+    getComments,
+    getTopics,
+    deleteTopic,
+  )
+where
 
-import           Data.Text                          (Text)
-import qualified Data.Text                          as Text
-
-import           Data.Time                          (getCurrentTime)
-
-import           Database.SQLite.Simple             (Connection, Query (Query))
-import qualified Database.SQLite.Simple             as Sql
-
-import qualified Database.SQLite.SimpleErrors       as Sql
-import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
-
-import           Level04.Types                      (Comment, CommentText,
-                                                     Error, Topic)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.Time (UTCTime, getCurrentTime)
+import Database.SQLite.Simple
+  ( Connection,
+    Query (Query),
+    close,
+    executeNamed,
+    execute_,
+    open,
+    queryNamed,
+  )
+import qualified Database.SQLite.Simple as Sql
+import qualified Database.SQLite.SimpleErrors as Sql
+import Database.SQLite.SimpleErrors.Types (SQLiteResponse)
+import Level04.DB.Types (DBComment)
+import Level04.Types
+  ( Comment (..),
+    CommentText (..),
+    Error (..),
+    Topic (..),
+    fromDBComment,
+    getTopic,
+  )
 
 -- ------------------------------------------------------------------------------|
 -- You'll need the documentation for sqlite-simple & sqlite-simple-errors handy! |
@@ -40,24 +53,25 @@ data FirstAppDB = FirstAppDB
   }
 
 -- Quick helper to pull the connection and close it down.
-closeDB
-  :: FirstAppDB
-  -> IO ()
-closeDB =
-  error "closeDB not implemented"
+closeDB ::
+  FirstAppDB ->
+  IO ()
+closeDB db = close (dbConn db)
 
 -- Given a `FilePath` to our SQLite DB file, initialise the database and ensure
 -- our Table is there by running a query to create it, if it doesn't exist
 -- already.
-initDB
-  :: FilePath
-  -> IO ( Either SQLiteResponse FirstAppDB )
-initDB fp =
-  error "initDB not implemented (use Sql.runDBAction to catch exceptions)"
+initDB ::
+  FilePath ->
+  IO (Either SQLiteResponse FirstAppDB)
+initDB fp = do
+  -- :: Connection
+  conn <- open fp
+  -- :: Either SqliteResponse ()
+  exec <- Sql.runDBAction $ execute_ conn createTableQ
+  -- :: IO (Either SqliteResponse FirstAppDB)
+  pure $ FirstAppDB conn <$ exec
   where
-  -- Query has an `IsString` instance so string literals like this can be
-  -- converted into a `Query` type when the `OverloadedStrings` language
-  -- extension is enabled.
     createTableQ = "CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, topic TEXT, comment TEXT, time TEXT)"
 
 -- Note that we don't store the `Comment` in the DB, it is the type we build
@@ -70,46 +84,60 @@ initDB fp =
 --
 -- HINT: You can use '?' or named place-holders as query parameters. Have a look
 -- at the section on parameter substitution in sqlite-simple's documentation.
-getComments
-  :: FirstAppDB
-  -> Topic
-  -> IO (Either Error [Comment])
-getComments =
-  let
-    sql = "SELECT id,topic,comment,time FROM comments WHERE topic = ?"
-  -- There are several possible implementations of this function. Particularly
-  -- there may be a trade-off between deciding to throw an Error if a DBComment
-  -- cannot be converted to a Comment, or simply ignoring any DBComment that is
-  -- not valid.
-  in
-    error "getComments not implemented (use Sql.runDBAction to catch exceptions)"
 
-addCommentToTopic
-  :: FirstAppDB
-  -> Topic
-  -> CommentText
-  -> IO (Either Error ())
-addCommentToTopic =
-  let
-    sql = "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
-  in
-    error "addCommentToTopic not implemented (use Sql.runDBAction to catch exceptions)"
+getComments ::
+  FirstAppDB ->
+  Topic ->
+  IO (Either Error [Comment])
+getComments (FirstAppDB conn) (Topic t) =
+  let sql = "SELECT id,topic,comment,time FROM comments WHERE topic = @topic"
+      queryToRun = queryNamed conn sql ["@topic" Sql.:= t] :: IO [DBComment]
+      replaceBits res = case res of
+        Left _ -> Left DBError
+        -- If any DBComment turns into an error, throw an overall error
+        Right r -> Right (fromDBComment <$> r) >>= sequence
+   in replaceBits <$> Sql.runDBAction queryToRun
 
-getTopics
-  :: FirstAppDB
-  -> IO (Either Error [Topic])
-getTopics =
-  let
-    sql = "SELECT DISTINCT topic FROM comments"
-  in
-    error "getTopics not implemented (use Sql.runDBAction to catch exceptions)"
+addCommentToTopic ::
+  FirstAppDB ->
+  Topic ->
+  CommentText ->
+  IO (Either Error ())
+addCommentToTopic (FirstAppDB conn) (Topic t) (CommentText ct) =
+  let sql = "INSERT INTO comments (topic,comment,time) VALUES (@topic,@comment,@time)"
+      --time = getCurrentTime
+      queryToRun time =
+        executeNamed
+          conn
+          sql
+          [ "@topic" Sql.:= t,
+            "@comment" Sql.:= ct,
+            "@time" Sql.:= time
+          ]
+      replaceBits res = case res of
+        Left _ -> Left DBError
+        Right r -> Right r
+   in replaceBits <$> Sql.runDBAction (getCurrentTime >>= queryToRun)
 
-deleteTopic
-  :: FirstAppDB
-  -> Topic
-  -> IO (Either Error ())
-deleteTopic =
-  let
-    sql = "DELETE FROM comments WHERE topic = ?"
-  in
-    error "deleteTopic not implemented (use Sql.runDBAction to catch exceptions)"
+getTopics ::
+  FirstAppDB ->
+  IO (Either Error [Topic])
+getTopics (FirstAppDB conn) =
+  let sql = "SELECT DISTINCT topic FROM comments"
+      queryToRun = queryNamed conn sql [] :: IO [Topic]
+      replaceBits res = case res of
+        Left _ -> Left DBError
+        Right r -> Right r
+   in replaceBits <$> Sql.runDBAction queryToRun
+
+deleteTopic ::
+  FirstAppDB ->
+  Topic ->
+  IO (Either Error ())
+deleteTopic (FirstAppDB conn) (Topic t) =
+  let sql = "DELETE FROM comments WHERE topic = @topic"
+      queryToRun = executeNamed conn sql ["@topic" Sql.:= t]
+      replaceBits res = case res of
+        Left _ -> Left DBError
+        Right r -> Right r
+   in replaceBits <$> Sql.runDBAction queryToRun
