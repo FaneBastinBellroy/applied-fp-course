@@ -1,20 +1,20 @@
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+
 module Level05.AppM
-  ( AppM
-  , liftEither
-  , runAppM
-  ) where
+  ( AppM (..),
+    liftEither,
+    runAppM,
+  )
+where
 
-import           Control.Monad.Except   (MonadError (..))
-import           Control.Monad.IO.Class (MonadIO (..))
-
-import           Data.Text              (Text)
-
-import           Level05.Types          (Error)
-
-import           Data.Bifunctor         (first)
+import Control.Monad (join)
+import Control.Monad.Except (MonadError (..))
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bifunctor (first)
+import Data.Text (Text)
+import Level05.Types (Error)
 
 -- We're going to add a very useful abstraction to our application. We'll
 -- automate away the explicit error handling and inspection of our Either values
@@ -49,6 +49,7 @@ import           Data.Bifunctor         (first)
 -- encountered, the structure of our AppM will automatically handle it for us.
 
 newtype AppM a = AppM (IO (Either Error a))
+
 -- This structure allows us to start writing our functions in terms of
 -- constraints. As an example, if we wanted to abstract over IO and indicate
 -- that instead of the concrete type we wanted a constraint that allows for IO
@@ -64,37 +65,60 @@ newtype AppM a = AppM (IO (Either Error a))
 --
 -- AppM e m a = AppM ( m (Either e a) )
 
-runAppM
-  :: AppM a
-  -> IO (Either Error a)
+runAppM ::
+  AppM a ->
+  IO (Either Error a)
 runAppM (AppM m) =
   m
 
 instance Functor AppM where
   fmap :: (a -> b) -> AppM a -> AppM b
-  fmap = error "fmap for AppM not implemented"
+  fmap f (AppM ioA) = AppM $ (f <$>) <$> ioA
 
 instance Applicative AppM where
   pure :: a -> AppM a
-  pure  = error "pure for AppM not implemented"
+  pure a = AppM $ pure $ pure a
 
   (<*>) :: AppM (a -> b) -> AppM a -> AppM b
-  (<*>) = error "spaceship for AppM not implemented"
+  (<*>) (AppM f) (AppM a) = AppM $ ((<*>) <$> f) <*> a
 
 instance Monad AppM where
   (>>=) :: AppM a -> (a -> AppM b) -> AppM b
-  (>>=)  = error "bind for AppM not implemented"
+  (>>=) (AppM ioA) f =
+    AppM $
+      -- IO(IO(Either Error a)) becomes IO(Either Error a)
+      join $
+        ( \ea -> case ea of
+            -- Add IO to get IO(Either Error a)
+            Left e -> pure $ Left e
+            -- Remove AppM to get IO(Either Error a)
+            Right a -> runAppM $ f a
+        )
+          <$> ioA
 
 instance MonadIO AppM where
   liftIO :: IO a -> AppM a
-  liftIO = error "liftIO for AppM not implemented"
+  -- Inside IO, turn `a` into `Either Error a`, then AppM the result
+  liftIO ioA = AppM $ pure <$> ioA
 
 instance MonadError Error AppM where
   throwError :: Error -> AppM a
-  throwError = error "throwError for AppM not implemented"
+  throwError e = AppM $ pure $ Left e
 
+  -- If the input AppM is a Left, run the function and return that.
+  -- If the input AppM is fine, return that.
   catchError :: AppM a -> (Error -> AppM a) -> AppM a
-  catchError = error "catchError for AppM not implemented"
+  catchError (AppM ioA) f =
+    AppM $
+      -- IO(IO(Either Error a)) becomes IO(Either Error a)
+      join $
+        ( \ea -> case ea of
+            -- Add IO to get IO(Either Error a)
+            Left e -> runAppM $ f e
+            -- Remove AppM to get IO(Either Error a)
+            Right a -> pure $ Right a
+        )
+          <$> ioA
 
 -- This is a helper function that will `lift` an Either value into our new AppM
 -- by applying `throwError` to the Left value, and using `pure` to lift the
@@ -103,10 +127,10 @@ instance MonadError Error AppM where
 -- throwError :: MonadError e m => e -> m a
 -- pure :: Applicative m => a -> m a
 --
-liftEither
-  :: Either Error a
-  -> AppM a
+liftEither ::
+  Either Error a ->
+  AppM a
 liftEither =
-  error "liftEither not implemented"
+  AppM . pure
 
 -- Go to 'src/Level05/DB.hs' next.
