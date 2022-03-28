@@ -14,6 +14,8 @@ module Level04.Types
   , getCommentText
   , renderContentType
   , fromDBComment
+  , encodeComment
+  , encodeTopic
   ) where
 
 import           GHC.Generics               (Generic)
@@ -41,7 +43,7 @@ import           Level04.DB.Types           (DBComment (..))
 -- just spin up another module.
 import           Level04.Types.CommentText  (CommentText (..), getCommentText,
                                              mkCommentText, commentToText)
-import           Level04.Types.Topic        (Topic (..), getTopic, mkTopic)
+import           Level04.Types.Topic        (Topic (..), getTopic, mkTopic, encodeTopic)
 
 import           Level04.Types.Error        (Error (..))
 

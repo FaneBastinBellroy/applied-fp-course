@@ -20,12 +20,16 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 import Level04.Conf (Conf (..), firstAppConfig)
-import Level04.DB (initDB)
+import Level04.DB
 import qualified Level04.DB as DB
 import Level04.Types
-  ( ContentType (JSON, PlainText),
+  ( Comment (..),
+    ContentType (JSON, PlainText),
     Error (..),
     RqType (AddRq, ListRq, ViewRq),
+    Topic (..),
+    encodeComment,
+    encodeTopic,
     mkCommentText,
     mkTopic,
     renderContentType,
@@ -152,16 +156,23 @@ app db rq cb = do
 --
 -- For both the 'ViewRq' and 'ListRq' functions, we'll need to pass the correct 'Encoder' to the
 -- 'resp200Json' function.
+toLBS :: Show a => a -> LBS.ByteString
+toLBS = LBS.pack . show
+
 handleRequest ::
   DB.FirstAppDB ->
   RqType ->
   IO (Either Error Response)
-handleRequest _db (AddRq _ _) =
-  (resp200 PlainText "Success" <$) <$> error "AddRq handler not implemented"
-handleRequest _db (ViewRq _) =
-  error "ViewRq handler not implemented"
+-- addCommentToTopic
+handleRequest _db (AddRq tp ct) =
+  (resp200 PlainText "Comment added successfully!" <$)
+    <$> addCommentToTopic _db tp ct
+-- getComments
+handleRequest _db (ViewRq tp) =
+  (resp200Json (E.list encodeComment) <$>) <$> getComments _db tp
+-- getTopics
 handleRequest _db ListRq =
-  error "ListRq handler not implemented"
+  (resp200Json (E.list encodeTopic) <$>) <$> getTopics _db
 
 mkRequest ::
   Request ->
