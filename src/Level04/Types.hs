@@ -82,12 +82,9 @@ encodeComment = E.mapLikeObj $ \c ->
 fromDBComment
   :: DBComment
   -> Either Error Comment
-fromDBComment dc =
-  pure $ Comment
-    (CommentId $ dbCommentId dc)
-    (Topic $ dbCommentTopic dc)
-    (CommentText $ dbCommentBody dc)
-    (dbCommentTime dc)
+fromDBComment (DBComment i tp tx t) =
+  Comment (CommentId i) <$> mkTopic tp <*>
+    mkCommentText tx <*> pure t
 
 data RqType
   = AddRq Topic CommentText
