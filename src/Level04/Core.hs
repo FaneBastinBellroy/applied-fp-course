@@ -80,6 +80,7 @@ prepareAppReqs ::
   IO (Either StartUpError DB.FirstAppDB)
 prepareAppReqs = do
   initResult <- initDB $ dbFilePath firstAppConfig
+  -- pure $ Bifunctor.first DBInitErr initResult
   pure $ case initResult of
     Left e -> Left $ DBInitErr e
     Right db -> Right db
