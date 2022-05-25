@@ -24,6 +24,7 @@ import qualified Database.SQLite.Simple as Sql
 import qualified Database.SQLite.SimpleErrors as Sql
 import Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 import Level05.AppM (AppM (..))
+import Level05.DB.Types (DBComment)
 import Level05.Types
   ( Comment,
     CommentText,
@@ -85,8 +86,15 @@ getComments ::
   FirstAppDB ->
   Topic ->
   AppM [Comment]
-getComments =
-  error "Copy your completed 'getComments' and refactor to match the new type signature"
+getComments (FirstAppDB conn) t =
+  let sql = "SELECT id,topic,comment,time FROM comments WHERE topic = @topic"
+      queryToRun = Sql.queryNamed conn sql ["@topic" Sql.:= getTopic t] :: IO [DBComment]
+      replaceBits :: Either SQLiteResponse [DBComment] -> Either Error [Comment]
+      replaceBits res = case res of
+        Left e -> Left $ DBError e
+        -- If any DBComment turns into an error, throw an overall error
+        Right r -> traverse fromDBComment r
+   in runDB replaceBits (Sql.runDBAction queryToRun)
 
 addCommentToTopic ::
   FirstAppDB ->

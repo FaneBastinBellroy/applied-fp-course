@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Level05.AppM
@@ -87,14 +88,13 @@ instance Monad AppM where
   (>>=) (AppM ioA) f =
     AppM $
       -- IO(IO(Either Error a)) becomes IO(Either Error a)
-      join $
-        ( \ea -> case ea of
-            -- Add IO to get IO(Either Error a)
-            Left e -> pure $ Left e
-            -- Remove AppM to get IO(Either Error a)
-            Right a -> runAppM $ f a
-        )
-          <$> ioA
+      ioA
+        >>= ( \case
+                -- Add IO to get IO(Either Error a)
+                Left e -> pure $ Left e
+                -- Remove AppM to get IO(Either Error a)
+                Right a -> runAppM $ f a
+            )
 
 instance MonadIO AppM where
   liftIO :: IO a -> AppM a
@@ -110,15 +110,11 @@ instance MonadError Error AppM where
   catchError :: AppM a -> (Error -> AppM a) -> AppM a
   catchError (AppM ioA) f =
     AppM $
-      -- IO(IO(Either Error a)) becomes IO(Either Error a)
-      join $
-        ( \ea -> case ea of
-            -- Add IO to get IO(Either Error a)
-            Left e -> runAppM $ f e
-            -- Remove AppM to get IO(Either Error a)
-            Right a -> pure $ Right a
-        )
-          <$> ioA
+      ioA
+        >>= ( \case
+                Left e -> runAppM $ f e
+                Right a -> pure $ Right a
+            )
 
 -- This is a helper function that will `lift` an Either value into our new AppM
 -- by applying `throwError` to the Left value, and using `pure` to lift the
